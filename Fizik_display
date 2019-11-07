@@ -1,55 +1,77 @@
-import tkinter as tk
 from tkinter import *
-from tkinter.ttk import *
+import threading
+import datetime
+import time
+from datetime import datetime
 
-def maininit(top, gui, *args, **kwargs):
-    global w, top_level, root
-    w = gui
-    top_level = top
-    root = top
+global filter_data
+global start_time
 
-class MainWindow(tk.Tk):
-    def __init__(self, top=None):
-        w, h = top.winfo_screenwidth()/4, root.winfo_screenheight()/4
-        top.geometry("%dx%d+0+0" % (w, h))
-        # top.geometry("800x480+1571+152")
-        top.title("Fizik Deneyi")
-        top.configure(background="#d9d9d9")
-        serial_data = ''
-        filter_data = ''
-        update_period = 60
-        serial_object = None
-        """Create frames"""
-        self.master=top
-        self.display_frame = tk.Frame(top)
-        self.display_frame.place(relx=0.0, rely=0.0, relheight=0.9, relwidth=0.60)
-        self.height_label = tk.Label(self.display_frame)
-        self.height_label.place(relx=0.0, rely=0.0, relheight=0.250, relwidth=0.70)
-        self.height_label.configure(disabledforeground="#a3a3a3")
-        self.height_label.configure(font=("Arial Bold", 18))
-        self.height_label.configure(foreground="#000000")
-        self.height_label.configure(text='''Höhe(mm)''')
-        self.height_in_mm = tk.Text(self.display_frame, height=1, width=80, font=("Arial Bold", 20),
-                                    bg='dark green', fg="white")
-        self.height_in_mm.place(relx=0.70, rely=0.0, relheight=0.250, relwidth=0.30)
-        self.height_in_mm.tag_configure("right",justify=RIGHT)
-        self.height_in_mm.tag_add("right",1.0,"end")
-        self.height_in_mm.insert(END,'230','right')
-        self.chronometer_label=tk.Label(self.display_frame)
-        self.chronometer_label.place(relx=0.0, rely=0.250, relheight=0.250, relwidth=0.70)
-        self.chronometer_label.configure(disabledforeground="#a3a3a3")
-        self.chronometer_label.configure(font=("Arial Bold", 18))
-        self.chronometer_label.configure(foreground="#000000")
-        self.chronometer_label.configure(text='''Zeit(sek)''')
+def get_data(self, new_data):
+    """This function serves the purpose of collecting data from the serial object and storing
+    the filtered data into a global variable.
+
+    The function has been put into a thread since the serial event is a blocking function.
+    """
+    global filter_data
+    filter_data = ""
+    while (1):
+        filter_data = datetime.now()
+        new_data.set()
+
+def update_gui(scale_display, new_data):
+    """" This function is an update function which is also threaded. The function assimilates the data
+    and applies it to it corresponding progress bar. The text box is also updated every couple of seconds.
+
+    A simple auto refresh function .after() could have been used, this has been avoid purposely due to
+    various performance issues.
 
 
-def vp_start_gui():
-    '''Starting point when module is the main routine.'''
-    global w, root, top
-    root = tk.Tk()
-    top = MainWindow(root)
-    maininit(root, top)
-    root.mainloop()
+    """
+    global filter_data
+    global start_time
+    while (1):
+        event_is_set = new_data.wait()
+        new_data.clear()
+        if filter_data:
+            diff= filter_data-start_time
+            str_diff="{}"
+            str_diff=str_diff.format(diff)
+            scale_display.delete(0, END)
+            scale_display.insert(END, str_diff)
 
-if __name__ == '__main__':
-    vp_start_gui()
+def set_formulaResult():
+    fs = "(2x{})/({}^2)={}"
+    height = float(height_entry.get())/1000
+    chronometer = float(chronometer_entry.get())/1000
+    ss = fs.format(height, chronometer, (2 * height) / pow(chronometer, 2))
+    formula_entry.delete(0, END)
+    formula_entry.insert(0, ss)
+
+root = Tk()
+height_label = Label(text="Höhe(mm)", justify=LEFT, fg="black",font=("Arial Bold", 20))
+height_label.grid(row=0)
+height_entry =Entry(root, font=("Arial Bold", 20))
+height_entry.grid(column=1, row=0)
+chronometer_label=Label(root, text="Zeit(ms)",justify=LEFT,fg="black",font=("Arial Bold", 20))
+chronometer_label.grid(row=1)
+chronometer_entry=Entry(root, font=("Arial Bold", 20))
+chronometer_entry.grid(column=1, row=1)
+chronometer_entry.insert(END,"0")
+ss=r'$(\frac{2{}}{})'
+formula_label=Label(root, text="Beschleunigung (g=2xh/t^2)",justify=LEFT,fg="black",font=("Arial Bold", 20))
+formula_label.grid(row=2)
+formula_entry=Entry(root, font=("Arial Bold", 20))
+formula_entry.grid(column=1,row=2)
+button_calculate=Button(root, text="Taschenrechner",font=("Arial Bold", 20), command=set_formulaResult)
+button_calculate.grid(column=0,row=3)
+start_time=datetime.now()
+new_data = threading.Event()
+t2 = threading.Thread(target=update_gui, args=(chronometer_entry, new_data,))
+t2.daemon = True
+t2.start()
+t1 = threading.Thread(target=get_data,
+                      args=(root, new_data,))
+t1.daemon = True
+t1.start()
+root.mainloop()
